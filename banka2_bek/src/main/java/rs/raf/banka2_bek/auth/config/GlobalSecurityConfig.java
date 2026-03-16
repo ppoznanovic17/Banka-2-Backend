@@ -45,6 +45,7 @@ public class GlobalSecurityConfig  {
                                 "/v3/api-docs"
                         ).permitAll()
                         .requestMatchers("/employees/**").hasRole("ADMIN")
+                        .requestMatchers("/payment-recipients/**").hasRole("CLIENT")
                         .anyRequest().authenticated()
                 )
                 .formLogin(AbstractHttpConfigurer::disable)
