@@ -47,6 +47,7 @@ public class GlobalSecurityConfig  {
                                 "/exchange/calculate"
                         ).permitAll()
                         .requestMatchers("/employees/**").hasRole("ADMIN")
+                        .requestMatchers("/payment-recipients/**").hasRole("CLIENT")
                         .anyRequest().authenticated()
                 )
                 .formLogin(AbstractHttpConfigurer::disable)

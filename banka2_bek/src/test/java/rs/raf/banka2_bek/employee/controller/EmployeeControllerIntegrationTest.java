@@ -10,7 +10,9 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.ClientHttpResponse;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.web.client.DefaultResponseErrorHandler;
 import org.springframework.web.client.RestTemplate;
 import rs.raf.banka2_bek.auth.model.User;
 import rs.raf.banka2_bek.auth.repository.PasswordResetTokenRepository;
@@ -29,10 +31,21 @@ import static org.springframework.http.HttpStatus.FORBIDDEN;
 @ActiveProfiles("test")
 class EmployeeControllerIntegrationTest {
 
-    private final RestTemplate restTemplate = new RestTemplate();
-
     @Value("${local.server.port}")
     private int port;
+
+    private final RestTemplate restTemplate = createRestTemplate();
+
+    private static RestTemplate createRestTemplate() {
+        RestTemplate rt = new RestTemplate();
+        rt.setErrorHandler(new DefaultResponseErrorHandler() {
+            @Override
+            public boolean hasError(ClientHttpResponse response) {
+                return false;
+            }
+        });
+        return rt;
+    }
 
     @Autowired
     private EmployeeRepository employeeRepository;
