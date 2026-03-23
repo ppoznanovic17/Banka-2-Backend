@@ -12,10 +12,15 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import rs.raf.banka2_bek.auth.config.GlobalExceptionHandler;
+import rs.raf.banka2_bek.order.controller.exception_handler.OrderExceptionHandler;
 import rs.raf.banka2_bek.order.dto.CreateOrderDto;
 import rs.raf.banka2_bek.order.dto.OrderDto;
 import rs.raf.banka2_bek.order.service.OrderService;
+
+import java.util.List;
 
 import jakarta.persistence.EntityNotFoundException;
 import java.math.BigDecimal;
@@ -23,6 +28,7 @@ import java.time.LocalDateTime;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -44,7 +50,7 @@ class OrderControllerTest {
     void setUp() {
         mockMvc = MockMvcBuilders
                 .standaloneSetup(orderController)
-                .setControllerAdvice(new GlobalExceptionHandler())
+                .setControllerAdvice(new OrderExceptionHandler(), new GlobalExceptionHandler())
                 .build();
     }
 
@@ -300,6 +306,48 @@ class OrderControllerTest {
                             .content(validMarketBuyJson()))
                     .andExpect(status().isNotFound())
                     .andExpect(jsonPath("$.message").value("Listing not found"));
+        }
+    }
+
+    @Nested
+    @DisplayName("GET /orders — supervisor list")
+    class GetAllOrders {
+
+        @Test
+        @DisplayName("200 — paginirana stranica")
+        void returnsPagedOrders() throws Exception {
+            OrderDto dto = sampleOrderDto();
+            when(orderService.getAllOrders(null, 0, 20))
+                    .thenReturn(new PageImpl<>(List.of(dto), PageRequest.of(0, 20), 1));
+
+            mockMvc.perform(get("/orders").param("page", "0").param("size", "20"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.content[0].id").value(1))
+                    .andExpect(jsonPath("$.content[0].status").value("APPROVED"))
+                    .andExpect(jsonPath("$.totalElements").value(1));
+        }
+
+        @Test
+        @DisplayName("status=ALL prosleđen servisu")
+        void allStatusForwarded() throws Exception {
+            when(orderService.getAllOrders("ALL", 0, 10))
+                    .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
+
+            mockMvc.perform(get("/orders").param("status", "ALL").param("page", "0").param("size", "10"))
+                    .andExpect(status().isOk());
+
+            verify(orderService).getAllOrders("ALL", 0, 10);
+        }
+
+        @Test
+        @DisplayName("400 — nevažeći status filter")
+        void invalidStatusReturns400() throws Exception {
+            when(orderService.getAllOrders("FOO", 0, 20))
+                    .thenThrow(new IllegalArgumentException("Invalid order status filter: 'FOO'. Allowed values: ALL, PENDING, APPROVED, DECLINED, DONE"));
+
+            mockMvc.perform(get("/orders").param("status", "FOO"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.message").value("Invalid order status filter: 'FOO'. Allowed values: ALL, PENDING, APPROVED, DECLINED, DONE"));
         }
     }
 }

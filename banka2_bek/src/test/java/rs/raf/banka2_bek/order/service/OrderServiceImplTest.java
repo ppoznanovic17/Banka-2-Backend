@@ -6,9 +6,14 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -32,10 +37,13 @@ import rs.raf.banka2_bek.stock.model.ListingType;
 import rs.raf.banka2_bek.stock.repository.ListingRepository;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -347,6 +355,90 @@ class OrderServiceImplTest {
                     order.getUserId().equals(42L) &&
                     "CLIENT".equals(order.getUserRole())
             ));
+        }
+    }
+
+    @Nested
+    @DisplayName("getAllOrders")
+    class GetAllOrders {
+
+        private Order orderEntity(OrderStatus status, LocalDateTime createdAt) {
+            Order o = new Order();
+            o.setId(1L);
+            o.setUserId(1L);
+            o.setUserRole("CLIENT");
+            o.setListing(testListing);
+            o.setOrderType(OrderType.MARKET);
+            o.setDirection(OrderDirection.BUY);
+            o.setQuantity(1);
+            o.setContractSize(1);
+            o.setPricePerUnit(BigDecimal.TEN);
+            o.setStatus(status);
+            o.setDone(false);
+            o.setAfterHours(false);
+            o.setAllOrNone(false);
+            o.setMargin(false);
+            o.setRemainingPortions(1);
+            o.setCreatedAt(createdAt);
+            return o;
+        }
+
+        @Test
+        @DisplayName("ALL — findAll sa sort createdAt DESC, id DESC")
+        void allUsesFindAllWithSort() {
+            Order o = orderEntity(OrderStatus.APPROVED, LocalDateTime.now());
+            Page<Order> page = new PageImpl<>(List.of(o));
+            when(orderRepository.findAll(any(Pageable.class))).thenReturn(page);
+
+            orderService.getAllOrders("ALL", 0, 20);
+
+            ArgumentCaptor<Pageable> cap = ArgumentCaptor.forClass(Pageable.class);
+            verify(orderRepository).findAll(cap.capture());
+            verify(orderRepository, never()).findByStatus(any(), any());
+            Pageable p = cap.getValue();
+            assertEquals(Sort.Direction.DESC, p.getSort().getOrderFor("createdAt").getDirection());
+            assertEquals(Sort.Direction.DESC, p.getSort().getOrderFor("id").getDirection());
+            assertEquals(0, p.getPageNumber());
+            assertEquals(20, p.getPageSize());
+        }
+
+        @Test
+        @DisplayName("null ili prazan status tretira kao ALL")
+        void blankStatusMeansAll() {
+            when(orderRepository.findAll(any(Pageable.class))).thenReturn(Page.empty());
+
+            orderService.getAllOrders(null, 0, 10);
+            orderService.getAllOrders("   ", 0, 10);
+
+            verify(orderRepository, times(2)).findAll(any(Pageable.class));
+            verify(orderRepository, never()).findByStatus(any(), any());
+        }
+
+        @Test
+        @DisplayName("pending (case-insensitive) — findByStatus PENDING")
+        void specificStatusFiltered() {
+            when(orderRepository.findByStatus(eq(OrderStatus.PENDING), any(Pageable.class)))
+                    .thenReturn(new PageImpl<>(List.of(orderEntity(OrderStatus.PENDING, LocalDateTime.now()))));
+
+            Page<OrderDto> result = orderService.getAllOrders("pending", 1, 5);
+
+            assertEquals(1, result.getContent().size());
+            assertEquals("PENDING", result.getContent().get(0).getStatus());
+            ArgumentCaptor<Pageable> cap = ArgumentCaptor.forClass(Pageable.class);
+            verify(orderRepository).findByStatus(eq(OrderStatus.PENDING), cap.capture());
+            assertEquals(1, cap.getValue().getPageNumber());
+            assertEquals(5, cap.getValue().getPageSize());
+            verify(orderRepository, never()).findAll(any(Pageable.class));
+        }
+
+        @Test
+        @DisplayName("nevažeći status — IllegalArgumentException")
+        void invalidStatusThrows() {
+            IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                    () -> orderService.getAllOrders("CANCELLED", 0, 20));
+            assertTrue(ex.getMessage().contains("Invalid order status filter"));
+            verify(orderRepository, never()).findAll(any(Pageable.class));
+            verify(orderRepository, never()).findByStatus(any(), any());
         }
     }
 }

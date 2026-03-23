@@ -4,6 +4,7 @@ import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -145,13 +146,24 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public Page<OrderDto> getAllOrders(String status, int page, int size) {
-        // TODO: Implementirati
-        // 1. Ako je status "ALL" ili null, dohvatiti sve ordere
-        // 2. Inace, filtrirati po statusu (PENDING, APPROVED, DECLINED, DONE)
-        // 3. Sortirati po createdAt DESC
-        // 4. Mapirati u OrderDto
-        throw new UnsupportedOperationException("TODO: Implementirati getAllOrders");
+        Sort sort = Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"));
+        Pageable pageable = PageRequest.of(page, size, sort);
+
+        String normalized = (status == null || status.isBlank()) ? "ALL" : status.trim().toUpperCase();
+        if ("ALL".equals(normalized)) {
+            return orderRepository.findAll(pageable).map(OrderMapper::toDto);
+        }
+
+        OrderStatus orderStatus;
+        try {
+            orderStatus = OrderStatus.valueOf(normalized);
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalArgumentException(
+                    "Invalid order status filter: '" + status + "'. Allowed values: ALL, PENDING, APPROVED, DECLINED, DONE");
+        }
+        return orderRepository.findByStatus(orderStatus, pageable).map(OrderMapper::toDto);
     }
 
     @Override

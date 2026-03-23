@@ -4,6 +4,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -58,6 +59,7 @@ public class GlobalSecurityConfig  {
                         .requestMatchers(org.springframework.http.HttpMethod.PATCH, "/cards/requests/*/reject").hasRole("ADMIN")
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/cards/requests").hasRole("ADMIN")
                         .requestMatchers("/loans/requests/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/orders").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )
                 .formLogin(AbstractHttpConfigurer::disable)
